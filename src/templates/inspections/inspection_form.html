@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "core/_responsive.html" %}
+<style>
+.dmg-card{border:1px solid #8886;border-radius:10px;padding:10px 12px;margin:10px 0}
+.dmg-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ck{border-bottom:1px solid #8883;padding:10px 0}
+.ck-name{font-weight:600}
+.ck-crit{color:#b91c1c}
+.seg>div{display:flex;gap:6px;margin-top:6px}
+.seg label{flex:1;margin:0;padding:10px 4px;border:1px solid #888;border-radius:8px;text-align:center;font-weight:500;cursor:pointer}
+.seg label:has(input:checked){background:#1d4ed8;color:#fff;border-color:#1d4ed8}
+.seg input{width:18px;height:18px;margin-right:6px;vertical-align:middle}
+</style>
+
+<div class="fleet">
+<p><a href="{% url 'vehicles:detail' vehicle.pk %}">&larr; {{ vehicle.fleet_number }}</a></p>
+<h1>Inspect {{ vehicle.fleet_number }}</h1>
+<p>{{ vehicle.make }} {{ vehicle.model }} &middot; {{ vehicle.plate_number }}</p>
+
+<form method="post" enctype="multipart/form-data" id="inspection-form">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+
+  <h2>Details</h2>
+  <label for="{{ form.inspection_type.id_for_label }}">Inspection type</label>
+  {{ form.inspection_type }}{{ form.inspection_type.errors }}
+  <label for="{{ form.driver.id_for_label }}">Driver</label>
+  {{ form.driver }}{{ form.driver.errors }}
+  <label for="{{ form.odometer.id_for_label }}">Odometer</label>
+  {{ form.odometer }}{{ form.odometer.errors }}
+  <label for="{{ form.incident_reference.id_for_label }}">Incident report no. (if any)</label>
+  {{ form.incident_reference }}{{ form.incident_reference.errors }}
+
+  <h2>Checklist</h2>
+  {% if rows %}
+    {% regroup rows by item.category as groups %}
+    {% for group in groups %}
+      <h3>{{ group.grouper|default:"General" }}</h3>
+      {% for row in group.list %}
+        <div class="ck">
+          <div class="ck-name">{{ row.item.name }}{% if row.item.is_critical %} <span class="ck-crit" title="Failing this makes the vehicle unsafe">*</span>{% endif %}</div>
+          <div class="seg">{{ row.result }}</div>
+          {{ row.result.errors }}
+          <div>{{ row.note }}{{ row.note.errors }}</div>
+        </div>
+      {% endfor %}
+    {% endfor %}
+    <p class="helptext"><span class="ck-crit">*</span> Failing this marks the vehicle unsafe to use.</p>
+  {% else %}
+    <p>No checklist items are set up for this vehicle type yet. Add them in the admin.</p>
+  {% endif %}
+
+  <h2>Damage</h2>
+  <p>Pick a view, then tap the vehicle where the damage is. Add a description and photo under the map.</p>
+
+  {{ damage_json|json_script:"damage-data" }}
+  {% include "inspections/_body_map.html" %}
+
+  <div class="btn-row"><button type="button" class="btn" id="dmg-reset">Reset new marks</button></div>
+
+  {{ formset.management_form }}
+  <div id="damage-forms">
+    {% for f in formset %}{% include "inspections/_damage_card.html" with form=f %}{% endfor %}
+  </div>
+  <script type="text/template" id="damage-empty">{% include "inspections/_damage_card.html" with form=formset.empty_form %}</script>
+
+  <h2>Overall</h2>
+  <label for="{{ form.overall_condition.id_for_label }}">Vehicle condition</label>
+  {{ form.overall_condition }}{{ form.overall_condition.errors }}
+  <label for="{{ form.notes.id_for_label }}">Notes</label>
+  {{ form.notes }}{{ form.notes.errors }}
+
+  <div class="sticky-actions">
+    <button type="submit" class="btn btn-primary" id="save-btn">Save inspection</button>
+  </div>
+</form>
+</div>
+
+<script>
+(function () {
+  var list = document.getElementById("damage-forms");
+  var total = document.getElementById("id_damage-TOTAL_FORMS");
+  var tpl = document.getElementById("damage-empty").innerHTML;
+  var viewNames = {left: "Left", right: "Right", front: "Front", rear: "Rear", top: "Top"};
+
+  function cards() { return list.querySelectorAll(".dmg-card"); }
+  function field(card, suffix) { return card.querySelector('[name$="-' + suffix + '"]'); }
+
+  function reindex() {
+    cards().forEach(function (c, i) {
+      c.querySelectorAll("[name],[id],label[for]").forEach(function (el) {
+        ["name", "id", "for"].forEach(function (a) {
+          var v = el.getAttribute(a);
+          if (v) el.setAttribute(a, v.replace(/damage-(\d+|__prefix__)-/, "damage-" + i + "-"));
+        });
+      });
+    });
+    total.value = cards().length;
+  }
+
+  function sync() {
+    var marks = [];
+    cards().forEach(function (c, i) {
+      var v = field(c, "view").value;
+      c.querySelector(".dmg-num").textContent = i + 1;
+      c.querySelector(".dmg-view").textContent = viewNames[v] || v;
+      marks.push({view: v, x: parseFloat(field(c, "x").value), y: parseFloat(field(c, "y").value), n: i + 1});
+    });
+    BodyMap.setAdded(marks);
+  }
+
+  BodyMap.onClick(function (view, x, y) {
+    var wrap = document.createElement("div");
+    wrap.innerHTML = tpl.replace(/__prefix__/g, cards().length).trim();
+    var card = wrap.firstElementChild;
+    list.appendChild(card);
+    field(card, "view").value = view;
+    field(card, "x").value = x.toFixed(2);
+    field(card, "y").value = y.toFixed(2);
+    reindex();
+    sync();
+    var d = field(card, "description");
+    card.scrollIntoView({behavior: "smooth", block: "center"});
+    if (d) d.focus({preventScroll: true});
+  });
+
+  list.addEventListener("click", function (e) {
+    if (e.target.classList.contains("dmg-remove")) {
+      e.target.closest(".dmg-card").remove();
+      reindex();
+      sync();
+    }
+  });
+
+  document.getElementById("dmg-reset").addEventListener("click", function () {
+    if (cards().length && !confirm("Remove all new marks from this inspection?")) return;
+    list.innerHTML = "";
+    reindex();
+    sync();
+  });
+
+  // Phone photos are huge: shrink to ~1600px JPEG before upload.
+  function shrink(input) {
+    var f = input.files && input.files[0];
+    if (!f || !/^image\/(jpeg|png|webp)/.test(f.type) || f.size < 400000) return;
+    var img = new Image(), url = URL.createObjectURL(f);
+    img.onload = function () {
+      var s = Math.min(1, 1600 / Math.max(img.width, img.height));
+      var c = document.createElement("canvas");
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(function (b) {
+        try {
+          if (b) {
+            var dt = new DataTransfer();
+            dt.items.add(new File([b], f.name.replace(/\.\w+$/, "") + ".jpg", {type: "image/jpeg"}));
+            input.files = dt.files;
+          }
+        } catch (err) { /* keep the original file */ }
+        URL.revokeObjectURL(url);
+      }, "image/jpeg", 0.8);
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); };
+    img.src = url;
+  }
+  list.addEventListener("change", function (e) {
+    if (e.target.type === "file") shrink(e.target);
+  });
+
+  // Stop double-taps creating duplicate inspections on slow connections.
+  var formEl = document.getElementById("inspection-form");
+  formEl.addEventListener("submit", function () {
+    var b = document.getElementById("save-btn");
+    b.disabled = true; b.textContent = "Saving...";
+  });
+
+  reindex();
+  sync();
+})();
+</script>
+{% endblock %}

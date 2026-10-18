@@ -1,25 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
+{% include "core/_responsive.html" %}
+<div class="fleet">
 <h1>Vehicles</h1>
-<table>
+<div class="btn-row"><a class="btn btn-primary" href="{% url 'inspections:start' %}">New inspection</a></div>
+<table class="stack">
   <thead>
     <tr><th>Fleet #</th><th>Plate</th><th>Vehicle</th><th>Type</th><th>Status</th><th>Condition</th><th>Service</th><th>Driver</th></tr>
   </thead>
   <tbody>
   {% for v in vehicles %}
     <tr>
-      <td><a href="{% url 'vehicles:detail' v.pk %}">{{ v.fleet_number }}</a></td>
-      <td>{{ v.plate_number }}</td>
-      <td>{{ v.make }} {{ v.model }}{% if v.year %} ({{ v.year }}){% endif %}</td>
-      <td>{{ v.vehicle_type }}</td>
-      <td>{{ v.get_status_display }}</td>
-      <td>{{ v.get_condition_display }}</td>
-      <td>{{ v.service_status_label }}</td>
-      <td>{{ v.current_driver|default:"-" }}</td>
+      <td data-label="Fleet #"><a href="{% url 'vehicles:detail' v.pk %}">{{ v.fleet_number }}</a></td>
+      <td data-label="Plate">{{ v.plate_number }}</td>
+      <td data-label="Vehicle">{{ v.make }} {{ v.model }}{% if v.year %} ({{ v.year }}){% endif %}</td>
+      <td data-label="Type">{{ v.vehicle_type }}</td>
+      <td data-label="Status">{{ v.get_status_display }}</td>
+      <td data-label="Condition">{{ v.get_condition_display }}</td>
+      <td data-label="Service">{% with b=v.service_badge %}<span class="badge b-{{ b.0 }}">{{ b.1 }}</span>{% endwith %}</td>
+      <td data-label="Driver">{{ v.current_driver|default:"-" }}</td>
     </tr>
   {% empty %}
     <tr><td colspan="8">No vehicles yet.</td></tr>
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

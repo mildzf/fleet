@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "core/_responsive.html" %}
+<div class="fleet">
+<h1>New inspection</h1>
+<p>Which vehicle?</p>
+{% for v in vehicles %}
+  <a class="btn" style="display:block;margin:8px 0;text-align:left" href="{% url 'inspections:new' v.pk %}">
+    <strong>{{ v.fleet_number }}</strong> &middot; {{ v.make }} {{ v.model }} &middot; {{ v.plate_number }}
+  </a>
+{% empty %}
+  <p>No vehicles yet.</p>
+{% endfor %}
+</div>
+{% endblock %}

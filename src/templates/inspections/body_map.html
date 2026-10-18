@@ -1,0 +1,148 @@
+{# Tappable vehicle body map. Needs {{ damage_json|json_script:"damage-data" }} on the page. #}
+<style>
+.bm-tabs{display:flex;gap:6px;margin:0 0 8px}
+.bm-tabs button{flex:1 1 0;min-height:44px;padding:6px 2px;font-size:15px;border:1px solid #888;border-radius:8px;
+  background:rgba(127,127,127,.12);color:inherit;cursor:pointer;touch-action:manipulation}
+.bm-tabs button.bm-on{background:#1d4ed8;color:#fff;border-color:#1d4ed8;font-weight:600}
+#bm-svg{display:block;width:100%;height:auto;border:1px solid #8886;border-radius:10px;
+  background:rgba(127,127,127,.06);touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
+.bm-line{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round}
+.bm-txt{font-size:7px;fill:currentColor;opacity:.55}
+.bm-old{fill:#f59e0b;stroke:#fff;stroke-width:1}
+.bm-new{fill:#dc2626;stroke:#fff;stroke-width:1}
+.bm-num{font-size:6px;font-weight:700;fill:#fff;text-anchor:middle;pointer-events:none}
+.bm-legend{font-size:.85rem;opacity:.75;margin:6px 0}
+</style>
+
+<div class="bm-tabs" role="group" aria-label="Vehicle view">
+  <button type="button" data-view="left"  data-label="Left">Left</button>
+  <button type="button" data-view="right" data-label="Right">Right</button>
+  <button type="button" data-view="front" data-label="Front">Front</button>
+  <button type="button" data-view="rear"  data-label="Rear">Rear</button>
+  <button type="button" data-view="top"   data-label="Top">Top</button>
+</div>
+
+<svg id="bm-svg" viewBox="0 0 200 100" role="img" aria-label="Vehicle body map">
+  <defs>
+    <g id="bm-side">
+      <path class="bm-line" d="M12,68 L12,56 Q12,50 20,48 L48,44 L66,24 Q69,22 74,22 L134,22 Q139,22 143,26 L158,44 L182,48 Q190,50 190,56 L190,68 Z"/>
+      <path class="bm-line" d="M72,27 L104,27 L104,43 L62,43 Z"/>
+      <path class="bm-line" d="M108,27 L134,27 L146,43 L108,43 Z"/>
+      <circle class="bm-line" cx="48" cy="70" r="13"/><circle class="bm-line" cx="152" cy="70" r="13"/>
+      <circle class="bm-line" cx="48" cy="70" r="5"/><circle class="bm-line" cx="152" cy="70" r="5"/>
+    </g>
+  </defs>
+
+  <g class="bm-v" data-view="left"><use href="#bm-side"/><text class="bm-txt" x="6" y="10">&larr; FRONT</text></g>
+  <g class="bm-v" data-view="right"><use href="#bm-side" transform="translate(200 0) scale(-1 1)"/><text class="bm-txt" x="194" y="10" text-anchor="end">FRONT &rarr;</text></g>
+
+  <g class="bm-v" data-view="top">
+    <rect class="bm-line" x="22" y="20" width="156" height="60" rx="18"/>
+    <rect class="bm-line" x="118" y="26" width="26" height="48" rx="5"/>
+    <rect class="bm-line" x="70" y="26" width="46" height="48" rx="6"/>
+    <rect class="bm-line" x="46" y="26" width="22" height="48" rx="5"/>
+    <rect class="bm-line" x="40" y="12" width="26" height="9" rx="3"/><rect class="bm-line" x="134" y="12" width="26" height="9" rx="3"/>
+    <rect class="bm-line" x="40" y="79" width="26" height="9" rx="3"/><rect class="bm-line" x="134" y="79" width="26" height="9" rx="3"/>
+    <text class="bm-txt" x="194" y="10" text-anchor="end">FRONT &rarr;</text>
+  </g>
+
+  <g class="bm-v" data-view="front">
+    <path class="bm-line" d="M58,46 L68,16 L132,16 L142,46 Z"/>
+    <path class="bm-line" d="M72,21 L128,21 L136,44 L64,44 Z"/>
+    <rect class="bm-line" x="45" y="46" width="110" height="30" rx="8"/>
+    <rect class="bm-line" x="38" y="62" width="12" height="28" rx="3"/><rect class="bm-line" x="150" y="62" width="12" height="28" rx="3"/>
+    <circle class="bm-line" cx="62" cy="58" r="5"/><circle class="bm-line" cx="138" cy="58" r="5"/>
+    <rect class="bm-line" x="84" y="56" width="32" height="9" rx="2"/>
+    <text class="bm-txt" x="6" y="10">FRONT</text>
+  </g>
+
+  <g class="bm-v" data-view="rear">
+    <path class="bm-line" d="M58,46 L68,16 L132,16 L142,46 Z"/>
+    <path class="bm-line" d="M74,22 L126,22 L132,44 L68,44 Z"/>
+    <rect class="bm-line" x="45" y="46" width="110" height="30" rx="8"/>
+    <rect class="bm-line" x="38" y="62" width="12" height="28" rx="3"/><rect class="bm-line" x="150" y="62" width="12" height="28" rx="3"/>
+    <rect class="bm-line" x="52" y="52" width="14" height="8" rx="2"/><rect class="bm-line" x="134" y="52" width="14" height="8" rx="2"/>
+    <rect class="bm-line" x="84" y="64" width="32" height="8" rx="2"/>
+    <text class="bm-txt" x="6" y="10">REAR</text>
+  </g>
+
+  <g id="bm-dots"></g>
+</svg>
+<p class="bm-legend">Grey-orange dots: existing open damage. Red numbered dots: new marks from this inspection.</p>
+
+<script>
+(function () {
+  var NS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("bm-svg");
+  var dots = document.getElementById("bm-dots");
+  var tabs = document.querySelectorAll(".bm-tabs button");
+  var dataEl = document.getElementById("damage-data");
+  var existing = dataEl ? JSON.parse(dataEl.textContent) : [];
+  var added = [];
+  var current = "left";
+  var clickCb = null;
+
+  function mk(name, attrs) {
+    var el = document.createElementNS(NS, name);
+    for (var k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  function render() {
+    while (dots.firstChild) dots.removeChild(dots.firstChild);
+    existing.forEach(function (d) {
+      if (d.view !== current) return;
+      var c = mk("circle", { "class": "bm-old", cx: d.x * 2, cy: d.y, r: 4.5 });
+      var t = mk("title", {});
+      t.textContent = d.severity + ": " + d.description;
+      c.appendChild(t);
+      dots.appendChild(c);
+    });
+    added.forEach(function (d) {
+      if (d.view !== current) return;
+      dots.appendChild(mk("circle", { "class": "bm-new", cx: d.x * 2, cy: d.y, r: 5 }));
+      var t = mk("text", { "class": "bm-num", x: d.x * 2, y: d.y + 2.2 });
+      t.textContent = d.n;
+      dots.appendChild(t);
+    });
+    tabs.forEach(function (b) {
+      var v = b.getAttribute("data-view");
+      var n = existing.filter(function (d) { return d.view === v; }).length +
+              added.filter(function (d) { return d.view === v; }).length;
+      b.textContent = b.getAttribute("data-label") + (n ? " (" + n + ")" : "");
+    });
+  }
+
+  function setView(v) {
+    current = v;
+    svg.querySelectorAll("g.bm-v").forEach(function (g) {
+      g.style.display = g.getAttribute("data-view") === v ? "" : "none";
+    });
+    tabs.forEach(function (b) {
+      var on = b.getAttribute("data-view") === v;
+      b.classList.toggle("bm-on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    render();
+  }
+
+  tabs.forEach(function (b) {
+    b.addEventListener("click", function () { setView(b.getAttribute("data-view")); });
+  });
+
+  svg.addEventListener("click", function (e) {
+    if (!clickCb) return;
+    var r = svg.getBoundingClientRect();
+    var x = Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100));
+    var y = Math.min(100, Math.max(0, (e.clientY - r.top) / r.height * 100));
+    clickCb(current, x, y);
+  });
+
+  window.BodyMap = {
+    setAdded: function (list) { added = list; render(); },
+    onClick: function (cb) { clickCb = cb; },
+    setView: setView
+  };
+  setView("left");
+})();
+</script>

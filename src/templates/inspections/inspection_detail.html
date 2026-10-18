@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "core/_responsive.html" %}
+<style>.res-fail{color:#b91c1c;font-weight:600}.dmg-photo{max-width:100%;height:auto;border-radius:8px;margin-top:6px}</style>
+<div class="fleet">
+<p><a href="{% url 'inspections:vehicle' inspection.vehicle.pk %}">&larr; {{ inspection.vehicle.fleet_number }} inspections &amp; damage</a></p>
+<h1>{{ inspection.get_inspection_type_display }}</h1>
+<p>
+  <a href="{% url 'vehicles:detail' inspection.vehicle.pk %}">{{ inspection.vehicle }}</a><br>
+  {{ inspection.inspected_at|date:"j M Y, H:i" }} &middot; by {{ inspection.inspected_by|default:"unknown" }}<br>
+  Driver: {{ inspection.driver|default:"-" }} &middot; Odometer: {{ inspection.odometer }}<br>
+  Condition: {{ inspection.get_overall_condition_display }}
+  {% if inspection.unsafe_to_use %}<span class="badge b-overdue">Unsafe to use</span>{% endif %}
+  {% if inspection.incident_reference %}<br>Incident report: {{ inspection.incident_reference }}{% endif %}
+</p>
+{% if inspection.notes %}<p>{{ inspection.notes|linebreaksbr }}</p>{% endif %}
+
+<h2>Checklist</h2>
+<table class="stack">
+  <thead><tr><th>Item</th><th>Result</th><th>Note</th></tr></thead>
+  <tbody>
+  {% for r in results %}
+    <tr>
+      <td data-label="Item">{% if r.category %}{{ r.category }}: {% endif %}{{ r.item_name }}</td>
+      <td data-label="Result"><span class="{% if r.result == 'fail' %}res-fail{% endif %}">{{ r.get_result_display }}</span></td>
+      <td data-label="Note">{{ r.notes|default:"-" }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="3">No checklist recorded.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Damage reported ({{ damage|length }})</h2>
+{{ damage_json|json_script:"damage-data" }}
+{% include "inspections/_body_map.html" %}
+{% for d in damage %}
+  <div class="dmg-card" style="border:1px solid #8886;border-radius:10px;padding:10px 12px;margin:10px 0">
+    <strong>{{ d.get_view_display }} &middot; {{ d.get_severity_display }}</strong><br>
+    {{ d.description }}
+    {% if d.photo %}<br><a href="{{ d.photo.url }}"><img class="dmg-photo" src="{{ d.photo.url }}" alt="Damage photo" loading="lazy"></a>{% endif %}
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

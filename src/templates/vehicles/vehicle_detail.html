@@ -1,7 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
+{% include "core/_responsive.html" %}
+<div class="fleet">
 <p><a href="{% url 'vehicles:list' %}">&larr; All vehicles</a></p>
 <h1>{{ vehicle.fleet_number }} - {{ vehicle.make }} {{ vehicle.model }}</h1>
+
+<div class="btn-row">
+  <a class="btn btn-primary" href="{% url 'inspections:new' vehicle.pk %}">New inspection</a>
+  <a class="btn" href="{% url 'inspections:vehicle' vehicle.pk %}">Inspections &amp; damage</a>
+</div>
 
 <p>Plate: {{ vehicle.plate_number }} | Type: {{ vehicle.vehicle_type }}{% if vehicle.is_armored %} | Armored {{ vehicle.armor_rating }}{% endif %}</p>
 <p>Status: {{ vehicle.get_status_display }} | Condition: {{ vehicle.get_condition_display }} | Odometer: {{ vehicle.odometer }}</p>
@@ -9,16 +16,16 @@
 {% if vehicle.condition_notes %}<p>{{ vehicle.condition_notes|linebreaksbr }}</p>{% endif %}
 
 <h2>Service due</h2>
-<table>
+<table class="stack">
   <thead><tr><th>Service</th><th>Last done</th><th>Next due (date)</th><th>Next due (odometer)</th><th>Status</th></tr></thead>
   <tbody>
   {% for rec, status in service_items %}
     <tr>
-      <td>{{ rec.service_type }}</td>
-      <td>{{ rec.performed_on }}</td>
-      <td>{{ rec.next_due_date|default:"-" }}</td>
-      <td>{{ rec.next_due_odometer|default:"-" }}</td>
-      <td>{{ status }}</td>
+      <td data-label="Service">{{ rec.service_type }}</td>
+      <td data-label="Last done">{{ rec.performed_on }}</td>
+      <td data-label="Next date">{{ rec.next_due_date|default:"-" }}</td>
+      <td data-label="Next odometer">{{ rec.next_due_odometer|default:"-" }}</td>
+      <td data-label="Status"><span class="badge b-{{ status }}">{{ status }}</span></td>
     </tr>
   {% empty %}
     <tr><td colspan="5">No service history yet.</td></tr>
@@ -27,29 +34,37 @@
 </table>
 
 <h2>Service history</h2>
-<table>
+<table class="stack">
   <thead><tr><th>Date</th><th>Service</th><th>Odometer</th><th>By</th><th>Cost</th><th>Notes</th></tr></thead>
   <tbody>
   {% for r in history %}
     <tr>
-      <td>{{ r.performed_on }}</td><td>{{ r.service_type }}</td><td>{{ r.odometer_at_service }}</td>
-      <td>{{ r.performed_by }}</td><td>{{ r.cost|default:"-" }}</td><td>{{ r.description }}</td>
+      <td data-label="Date">{{ r.performed_on }}</td>
+      <td data-label="Service">{{ r.service_type }}</td>
+      <td data-label="Odometer">{{ r.odometer_at_service }}</td>
+      <td data-label="By">{{ r.performed_by|default:"-" }}</td>
+      <td data-label="Cost">{{ r.cost|default:"-" }}</td>
+      <td data-label="Notes">{{ r.description|default:"-" }}</td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
 
 <h2>Driver history</h2>
-<table>
+<table class="stack">
   <thead><tr><th>Driver</th><th>From</th><th>To</th><th>Notes</th></tr></thead>
   <tbody>
   {% for a in driver_history %}
     <tr>
-      <td>{{ a.driver }}</td><td>{{ a.start_date }}</td><td>{{ a.end_date|default:"Current" }}</td><td>{{ a.notes }}</td>
+      <td data-label="Driver">{{ a.driver }}</td>
+      <td data-label="From">{{ a.start_date }}</td>
+      <td data-label="To">{{ a.end_date|default:"Current" }}</td>
+      <td data-label="Notes">{{ a.notes|default:"-" }}</td>
     </tr>
   {% empty %}
     <tr><td colspan="4">No drivers assigned yet.</td></tr>
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

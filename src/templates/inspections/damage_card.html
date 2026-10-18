@@ -1,0 +1,15 @@
+<div class="dmg-card">
+  <div class="dmg-head">
+    <strong>Mark #<span class="dmg-num">?</span> &middot; <span class="dmg-view"></span></strong>
+    <button type="button" class="btn btn-small btn-danger dmg-remove">Remove</button>
+  </div>
+  {{ form.view }}{{ form.x }}{{ form.y }}
+  {{ form.non_field_errors }}
+  <label for="{{ form.severity.id_for_label }}">Severity</label>
+  {{ form.severity }}{{ form.severity.errors }}
+  <label for="{{ form.description.id_for_label }}">What's the damage?</label>
+  {{ form.description }}{{ form.description.errors }}
+  <label for="{{ form.photo.id_for_label }}">Photo (optional)</label>
+  {{ form.photo }}{{ form.photo.errors }}
+  {{ form.x.errors }}{{ form.y.errors }}{{ form.view.errors }}
+</div>

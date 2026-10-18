@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "core/_responsive.html" %}
+<style>.dmg-photo{max-width:120px;height:auto;border-radius:6px}</style>
+<div class="fleet">
+<p><a href="{% url 'vehicles:detail' vehicle.pk %}">&larr; {{ vehicle.fleet_number }}</a></p>
+<h1>{{ vehicle.fleet_number }}: inspections &amp; damage</h1>
+<div class="btn-row"><a class="btn btn-primary" href="{% url 'inspections:new' vehicle.pk %}">New inspection</a></div>
+
+<h2>Open damage ({{ open_count }})</h2>
+{{ damage_json|json_script:"damage-data" }}
+{% include "inspections/_body_map.html" %}
+
+<h2>Damage history</h2>
+<table class="stack">
+  <thead><tr><th>Reported</th><th>Where</th><th>Severity</th><th>Description</th><th>Status</th><th>Photo</th><th></th></tr></thead>
+  <tbody>
+  {% for d in damage %}
+    <tr>
+      <td data-label="Reported"><a href="{% url 'inspections:detail' d.inspection_id %}">{{ d.created|date:"j M Y" }}</a></td>
+      <td data-label="Where">{{ d.get_view_display }}</td>
+      <td data-label="Severity">{{ d.get_severity_display }}</td>
+      <td data-label="Description">{{ d.description }}</td>
+      <td data-label="Status">{{ d.get_status_display }}{% if d.repaired_on %} ({{ d.repaired_on|date:"j M Y" }}){% endif %}</td>
+      <td data-label="Photo">{% if d.photo %}<a href="{{ d.photo.url }}"><img class="dmg-photo" src="{{ d.photo.url }}" alt="Damage photo" loading="lazy"></a>{% else %}-{% endif %}</td>
+      <td>
+        {% if d.status == 'open' and perms.inspections.change_damagepoint %}
+          <form method="post" action="{% url 'inspections:damage_repaired' d.pk %}">{% csrf_token %}
+            <button class="btn btn-small" type="submit">Mark repaired</button>
+          </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="7">No damage recorded.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Inspections</h2>
+<table class="stack">
+  <thead><tr><th>Date</th><th>Type</th><th>By</th><th>Condition</th></tr></thead>
+  <tbody>
+  {% for i in inspections %}
+    <tr>
+      <td data-label="Date"><a href="{% url 'inspections:detail' i.pk %}">{{ i.inspected_at|date:"j M Y, H:i" }}</a></td>
+      <td data-label="Type">{{ i.get_inspection_type_display }}</td>
+      <td data-label="By">{{ i.inspected_by|default:"-" }}</td>
+      <td data-label="Condition">{{ i.get_overall_condition_display }}{% if i.unsafe_to_use %} <span class="badge b-overdue">Unsafe</span>{% endif %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4">No inspections yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

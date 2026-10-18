@@ -1,165 +1,197 @@
+from datetime import timedelta
+
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Q
 from django.utils import timezone
 
-# Days before a licence/certification expires that it shows as "expiring".
-EXPIRY_WARN_DAYS = getattr(settings, "FLEET_EXPIRY_WARN_DAYS", 60)
+# Tune these in settings.py if you like.
+DUE_SOON_DAYS = getattr(settings, "FLEET_DUE_SOON_DAYS", 30)
+DUE_SOON_DISTANCE = getattr(settings, "FLEET_DUE_SOON_DISTANCE", 500)
 
 
-class ExpiryStatus:
-    VALID = "valid"
-    EXPIRING = "expiring"
-    EXPIRED = "expired"
-    MISSING = "missing"
+class ServiceStatus:
+    OK = "ok"
+    DUE_SOON = "due_soon"
+    OVERDUE = "overdue"
+    NO_HISTORY = "no_history"
 
     LABELS = {
-        VALID: "Valid",
-        EXPIRING: "Expiring soon",
-        EXPIRED: "Expired",
-        MISSING: "Not recorded",
+        OK: "Up to date",
+        DUE_SOON: "Due soon",
+        OVERDUE: "Overdue",
+        NO_HISTORY: "No service history",
     }
+    # Higher = worse, used to pick the worst status across service types
+    SEVERITY = {NO_HISTORY: 3, OVERDUE: 2, DUE_SOON: 1, OK: 0}
 
 
-def expiry_status(expiry):
-    if not expiry:
-        return ExpiryStatus.MISSING
-    days_left = (expiry - timezone.localdate()).days
-    if days_left < 0:
-        return ExpiryStatus.EXPIRED
-    if days_left <= EXPIRY_WARN_DAYS:
-        return ExpiryStatus.EXPIRING
-    return ExpiryStatus.VALID
+class VehicleType(models.Model):
+    """Admin-editable so the fleet's own categories can be added (armored, CIT, etc.)."""
+
+    name = models.CharField(max_length=100, unique=True)
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
 
 
-class Driver(models.Model):
+class ServiceType(models.Model):
+    """e.g. Oil change, Brake inspection, Armor integrity check."""
+
+    name = models.CharField(max_length=100, unique=True)
+    interval_days = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Repeat every N days (leave blank if not date-based)."
+    )
+    interval_distance = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Repeat every N km/miles (leave blank if not distance-based)."
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Vehicle(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
-        SUSPENDED = "suspended", "Suspended"
-        INACTIVE = "inactive", "Inactive"
+        IN_SERVICE = "in_service", "In the garage"
+        OUT_OF_SERVICE = "out_of_service", "Out of service"
+        RETIRED = "retired", "Retired"
 
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="driver_profile"
-    )
-    employee_number = models.CharField(max_length=50, blank=True)
-    phone = models.CharField(max_length=30, blank=True)
+    class Condition(models.TextChoices):
+        EXCELLENT = "excellent", "Excellent"
+        GOOD = "good", "Good"
+        FAIR = "fair", "Fair"
+        POOR = "poor", "Poor"
+        UNSAFE = "unsafe", "Unsafe - do not use"
+
+    fleet_number = models.CharField(max_length=30, unique=True)
+    plate_number = models.CharField(max_length=20, unique=True)
+    vin = models.CharField("VIN / chassis no.", max_length=30, blank=True)
+    make = models.CharField(max_length=50)
+    model = models.CharField(max_length=50)
+    year = models.PositiveSmallIntegerField(null=True, blank=True)
+    colour = models.CharField(max_length=30, blank=True)
+    vehicle_type = models.ForeignKey(VehicleType, on_delete=models.PROTECT, related_name="vehicles")
+
+    is_armored = models.BooleanField(default=False)
+    armor_rating = models.CharField(max_length=50, blank=True, help_text="e.g. B6, only if armored.")
+    special_equipment = models.TextField(blank=True, help_text="Safe, radios, lights, etc.")
+
+    odometer = models.PositiveIntegerField(default=0, help_text="Current reading (same unit every time).")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    condition = models.CharField(max_length=20, choices=Condition.choices, default=Condition.GOOD)
+    condition_notes = models.TextField(blank=True)
+    condition_updated = models.DateField(null=True, blank=True)
 
-    licence_number = models.CharField(max_length=50)
-    licence_class = models.CharField(max_length=30, help_text="Licence class/category as shown on the licence.")
-    licence_expiry = models.DateField()
-
-    is_armed_driver = models.BooleanField(default=False)
-    armed_cert_number = models.CharField("armed-driver cert. number", max_length=50, blank=True)
-    armed_cert_expiry = models.DateField("armed-driver cert. expiry", null=True, blank=True)
-
-    authorized_vehicle_types = models.ManyToManyField(
-        "vehicles.VehicleType", blank=True, related_name="authorized_drivers"
-    )
+    registration_expiry = models.DateField(null=True, blank=True)
+    insurance_expiry = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["user__last_name", "user__first_name", "user__username"]
+        ordering = ["fleet_number"]
 
     def __str__(self):
-        return self.name
+        return f"{self.fleet_number} - {self.make} {self.model} ({self.plate_number})"
+
+    def latest_service_records(self):
+        """Most recent record for each service type."""
+        latest = {}
+        records = self.service_records.select_related("service_type").order_by("performed_on", "id")
+        for rec in records:
+            latest[rec.service_type_id] = rec
+        return list(latest.values())
+
+    def service_items(self):
+        """[(record, status)] for each service type this vehicle has history for."""
+        return [(rec, rec.status_for(self.odometer)) for rec in self.latest_service_records()]
 
     @property
-    def name(self):
-        return self.user.get_full_name() or self.user.get_username()
+    def service_status(self):
+        items = self.service_items()
+        if not items:
+            return ServiceStatus.NO_HISTORY
+        return max((s for _, s in items), key=lambda s: ServiceStatus.SEVERITY[s])
 
     @property
-    def licence_status(self):
-        return expiry_status(self.licence_expiry)
+    def service_status_label(self):
+        return ServiceStatus.LABELS[self.service_status]
 
     @property
-    def licence_status_label(self):
-        return ExpiryStatus.LABELS[self.licence_status]
+    def service_badge(self):
+        """(status, label) computed once, for templates."""
+        status = self.service_status
+        return status, ServiceStatus.LABELS[status]
 
     @property
-    def armed_cert_status(self):
-        if not self.is_armed_driver:
-            return None
-        return expiry_status(self.armed_cert_expiry)
+    def current_driver(self):
+        """The driver on the open (no end date) assignment, if any. Assignments live in the drivers app."""
+        assignment = self.assignments.filter(end_date__isnull=True).select_related("driver__user").first()
+        return assignment.driver if assignment else None
 
     @property
-    def armed_cert_status_label(self):
-        status = self.armed_cert_status
-        return ExpiryStatus.LABELS[status] if status else "n/a"
-
-    def clean(self):
-        if self.is_armed_driver and not self.armed_cert_expiry:
-            raise ValidationError({"armed_cert_expiry": "Required for armed drivers."})
-
-    def drive_blockers(self, vehicle):
-        """Reasons this driver should not be assigned to `vehicle` (empty list = fine)."""
-        reasons = []
-        if self.status != self.Status.ACTIVE:
-            reasons.append(f"Driver is {self.get_status_display().lower()}.")
-        if self.licence_status in (ExpiryStatus.EXPIRED, ExpiryStatus.MISSING):
-            reasons.append("Driver's licence is expired or not recorded.")
-        if not self.authorized_vehicle_types.filter(pk=vehicle.vehicle_type_id).exists():
-            reasons.append(f"Driver is not authorized for vehicle type: {vehicle.vehicle_type}.")
-        return reasons
-
-    @property
-    def current_assignments(self):
-        return self.assignments.filter(end_date__isnull=True).select_related("vehicle")
+    def last_serviced(self):
+        rec = self.service_records.order_by("-performed_on", "-id").first()
+        return rec.performed_on if rec else None
 
 
-class VehicleAssignment(models.Model):
-    """One row per stretch of time a driver has a vehicle. No end date = current."""
+class ServiceRecord(models.Model):
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="service_records")
+    service_type = models.ForeignKey(ServiceType, on_delete=models.PROTECT, related_name="records")
+    performed_on = models.DateField()
+    odometer_at_service = models.PositiveIntegerField()
+    performed_by = models.CharField(max_length=100, blank=True, help_text="Garage or technician.")
+    cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    reference = models.CharField(max_length=50, blank=True, help_text="Invoice / job card number.")
+    description = models.TextField(blank=True)
 
-    vehicle = models.ForeignKey("vehicles.Vehicle", on_delete=models.PROTECT, related_name="assignments")
-    driver = models.ForeignKey(Driver, on_delete=models.PROTECT, related_name="assignments")
-    start_date = models.DateField(default=timezone.localdate)
-    end_date = models.DateField(null=True, blank=True, help_text="Leave blank while the assignment is current.")
-    assigned_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
-    )
-    notes = models.CharField(max_length=255, blank=True)
+    # Auto-filled from the service type's intervals when left blank; override if needed.
+    next_due_date = models.DateField(null=True, blank=True)
+    next_due_odometer = models.PositiveIntegerField(null=True, blank=True)
+
+    created = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-start_date", "-id"]
+        ordering = ["-performed_on", "-id"]
 
     def __str__(self):
-        return f"{self.vehicle.fleet_number} -> {self.driver} ({self.start_date})"
-
-    @property
-    def is_current(self):
-        return self.end_date is None
-
-    def clean(self):
-        if not (self.vehicle_id and self.driver_id):
-            return
-        if self.end_date and self.end_date < self.start_date:
-            raise ValidationError({"end_date": "End date cannot be before the start date."})
-
-        # A vehicle can only have one driver at a time.
-        overlapping = (
-            VehicleAssignment.objects.filter(vehicle_id=self.vehicle_id)
-            .exclude(pk=self.pk)
-            .filter(Q(end_date__isnull=True) | Q(end_date__gte=self.start_date))
-        )
-        if self.end_date:
-            overlapping = overlapping.filter(start_date__lte=self.end_date)
-        if overlapping.exists():
-            raise ValidationError("This vehicle already has an assignment that overlaps these dates.")
-
-        # Eligibility is only enforced for current assignments, so old history can be entered freely.
-        if self.end_date is None:
-            blockers = self.driver.drive_blockers(self.vehicle)
-            if self.vehicle.status == "retired":
-                blockers.append("Vehicle is retired.")
-            if blockers:
-                raise ValidationError(blockers)
+        return f"{self.vehicle.fleet_number} - {self.service_type} on {self.performed_on}"
 
     def save(self, *args, **kwargs):
-        self.full_clean()
+        st = self.service_type
+        if self.next_due_date is None and st.interval_days:
+            self.next_due_date = self.performed_on + timedelta(days=st.interval_days)
+        if self.next_due_odometer is None and st.interval_distance:
+            self.next_due_odometer = self.odometer_at_service + st.interval_distance
         super().save(*args, **kwargs)
+        # Keep the vehicle's odometer from lagging behind its service history.
+        if self.odometer_at_service > self.vehicle.odometer:
+            Vehicle.objects.filter(pk=self.vehicle_id).update(odometer=self.odometer_at_service)
 
-
+    def status_for(self, current_odometer):
+        """Whichever comes first, date or distance."""
+        today = timezone.localdate()
+        statuses = []
+        if self.next_due_date:
+            days_left = (self.next_due_date - today).days
+            if days_left < 0:
+                statuses.append(ServiceStatus.OVERDUE)
+            elif days_left <= DUE_SOON_DAYS:
+                statuses.append(ServiceStatus.DUE_SOON)
+        if self.next_due_odometer:
+            left = self.next_due_odometer - current_odometer
+            if left <= 0:
+                statuses.append(ServiceStatus.OVERDUE)
+            elif left <= DUE_SOON_DISTANCE:
+                statuses.append(ServiceStatus.DUE_SOON)
+        if not statuses:
+            return ServiceStatus.OK
+        return max(statuses, key=lambda s: ServiceStatus.SEVERITY[s])

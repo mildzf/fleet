@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "core/_responsive.html" %}
+<div class="fleet">
+<h1>Inspections</h1>
+<div class="btn-row"><a class="btn btn-primary" href="{% url 'inspections:start' %}">New inspection</a></div>
+<table class="stack">
+  <thead><tr><th>Date</th><th>Vehicle</th><th>Type</th><th>By</th><th>Condition</th></tr></thead>
+  <tbody>
+  {% for i in inspections %}
+    <tr>
+      <td data-label="Date"><a href="{% url 'inspections:detail' i.pk %}">{{ i.inspected_at|date:"j M Y, H:i" }}</a></td>
+      <td data-label="Vehicle">{{ i.vehicle.fleet_number }}</td>
+      <td data-label="Type">{{ i.get_inspection_type_display }}</td>
+      <td data-label="By">{{ i.inspected_by|default:"-" }}</td>
+      <td data-label="Condition">{{ i.get_overall_condition_display }}{% if i.unsafe_to_use %} <span class="badge b-overdue">Unsafe</span>{% endif %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5">No inspections yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
