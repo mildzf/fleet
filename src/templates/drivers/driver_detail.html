@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Drivers</h1>
+<table>
+  <thead>
+    <tr><th>Name</th><th>Employee #</th><th>Status</th><th>Licence</th><th>Licence expiry</th><th>Armed cert.</th></tr>
+  </thead>
+  <tbody>
+  {% for d in drivers %}
+    <tr>
+      <td><a href="{% url 'drivers:detail' d.pk %}">{{ d.name }}</a></td>
+      <td>{{ d.employee_number|default:"-" }}</td>
+      <td>{{ d.get_status_display }}</td>
+      <td>{{ d.licence_class }}</td>
+      <td>{{ d.licence_expiry }} ({{ d.licence_status_label }})</td>
+      <td>{{ d.armed_cert_status_label }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6">No drivers yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

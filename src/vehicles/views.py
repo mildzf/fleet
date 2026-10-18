@@ -10,7 +10,7 @@ class VehicleListView(LoginRequiredMixin, ListView):
     context_object_name = "vehicles"
 
     def get_queryset(self):
-        return Vehicle.objects.select_related("vehicle_type", "assigned_driver")
+        return Vehicle.objects.select_related("vehicle_type")
 
 
 class VehicleDetailView(LoginRequiredMixin, DetailView):
@@ -21,4 +21,5 @@ class VehicleDetailView(LoginRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         ctx["service_items"] = self.object.service_items()
         ctx["history"] = self.object.service_records.select_related("service_type")
+        ctx["driver_history"] = self.object.assignments.select_related("driver__user")
         return ctx

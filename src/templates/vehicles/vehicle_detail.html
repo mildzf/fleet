@@ -5,7 +5,7 @@
 
 <p>Plate: {{ vehicle.plate_number }} | Type: {{ vehicle.vehicle_type }}{% if vehicle.is_armored %} | Armored {{ vehicle.armor_rating }}{% endif %}</p>
 <p>Status: {{ vehicle.get_status_display }} | Condition: {{ vehicle.get_condition_display }} | Odometer: {{ vehicle.odometer }}</p>
-<p>Driver: {{ vehicle.assigned_driver|default:"Unassigned" }}</p>
+<p>Driver: {{ vehicle.current_driver|default:"Unassigned" }}</p>
 {% if vehicle.condition_notes %}<p>{{ vehicle.condition_notes|linebreaksbr }}</p>{% endif %}
 
 <h2>Service due</h2>
@@ -35,6 +35,20 @@
       <td>{{ r.performed_on }}</td><td>{{ r.service_type }}</td><td>{{ r.odometer_at_service }}</td>
       <td>{{ r.performed_by }}</td><td>{{ r.cost|default:"-" }}</td><td>{{ r.description }}</td>
     </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Driver history</h2>
+<table>
+  <thead><tr><th>Driver</th><th>From</th><th>To</th><th>Notes</th></tr></thead>
+  <tbody>
+  {% for a in driver_history %}
+    <tr>
+      <td>{{ a.driver }}</td><td>{{ a.start_date }}</td><td>{{ a.end_date|default:"Current" }}</td><td>{{ a.notes }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4">No drivers assigned yet.</td></tr>
   {% endfor %}
   </tbody>
 </table>

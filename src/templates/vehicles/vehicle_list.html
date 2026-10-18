@@ -15,7 +15,7 @@
       <td>{{ v.get_status_display }}</td>
       <td>{{ v.get_condition_display }}</td>
       <td>{{ v.service_status_label }}</td>
-      <td>{{ v.assigned_driver|default:"-" }}</td>
+      <td>{{ v.current_driver|default:"-" }}</td>
     </tr>
   {% empty %}
     <tr><td colspan="8">No vehicles yet.</td></tr>

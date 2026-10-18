@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<p><a href="{% url 'drivers:list' %}">&larr; All drivers</a></p>
+<h1>{{ driver.name }}</h1>
+
+<p>Employee #: {{ driver.employee_number|default:"-" }} | Phone: {{ driver.phone|default:"-" }} | Status: {{ driver.get_status_display }}</p>
+
+<h2>Licence</h2>
+<p>
+  No. {{ driver.licence_number }} | Class {{ driver.licence_class }} |
+  Expires {{ driver.licence_expiry }} ({{ driver.licence_status_label }})
+</p>
+
+{% if driver.is_armed_driver %}
+<h2>Armed-driver certification</h2>
+<p>
+  No. {{ driver.armed_cert_number|default:"-" }} |
+  Expires {{ driver.armed_cert_expiry }} ({{ driver.armed_cert_status_label }})
+</p>
+{% endif %}
+
+<h2>Authorized vehicle types</h2>
+<p>{% for t in authorized_types %}{{ t }}{% if not forloop.last %}, {% endif %}{% empty %}None recorded.{% endfor %}</p>
+
+<h2>Current vehicles</h2>
+<ul>
+  {% for a in driver.current_assignments %}
+    <li><a href="{% url 'vehicles:detail' a.vehicle.pk %}">{{ a.vehicle }}</a> (since {{ a.start_date }})</li>
+  {% empty %}
+    <li>None.</li>
+  {% endfor %}
+</ul>
+
+<h2>Assignment history</h2>
+<table>
+  <thead><tr><th>Vehicle</th><th>From</th><th>To</th><th>Notes</th></tr></thead>
+  <tbody>
+  {% for a in history %}
+    <tr>
+      <td><a href="{% url 'vehicles:detail' a.vehicle.pk %}">{{ a.vehicle.fleet_number }}</a></td>
+      <td>{{ a.start_date }}</td><td>{{ a.end_date|default:"Current" }}</td><td>{{ a.notes }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4">No assignments yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
