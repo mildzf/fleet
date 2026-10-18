@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Vehicles</h1>
+<table>
+  <thead>
+    <tr><th>Fleet #</th><th>Plate</th><th>Vehicle</th><th>Type</th><th>Status</th><th>Condition</th><th>Service</th><th>Driver</th></tr>
+  </thead>
+  <tbody>
+  {% for v in vehicles %}
+    <tr>
+      <td><a href="{% url 'vehicles:detail' v.pk %}">{{ v.fleet_number }}</a></td>
+      <td>{{ v.plate_number }}</td>
+      <td>{{ v.make }} {{ v.model }}{% if v.year %} ({{ v.year }}){% endif %}</td>
+      <td>{{ v.vehicle_type }}</td>
+      <td>{{ v.get_status_display }}</td>
+      <td>{{ v.get_condition_display }}</td>
+      <td>{{ v.service_status_label }}</td>
+      <td>{{ v.assigned_driver|default:"-" }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="8">No vehicles yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

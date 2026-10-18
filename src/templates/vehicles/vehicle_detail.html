@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<p><a href="{% url 'vehicles:list' %}">&larr; All vehicles</a></p>
+<h1>{{ vehicle.fleet_number }} - {{ vehicle.make }} {{ vehicle.model }}</h1>
+
+<p>Plate: {{ vehicle.plate_number }} | Type: {{ vehicle.vehicle_type }}{% if vehicle.is_armored %} | Armored {{ vehicle.armor_rating }}{% endif %}</p>
+<p>Status: {{ vehicle.get_status_display }} | Condition: {{ vehicle.get_condition_display }} | Odometer: {{ vehicle.odometer }}</p>
+<p>Driver: {{ vehicle.assigned_driver|default:"Unassigned" }}</p>
+{% if vehicle.condition_notes %}<p>{{ vehicle.condition_notes|linebreaksbr }}</p>{% endif %}
+
+<h2>Service due</h2>
+<table>
+  <thead><tr><th>Service</th><th>Last done</th><th>Next due (date)</th><th>Next due (odometer)</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for rec, status in service_items %}
+    <tr>
+      <td>{{ rec.service_type }}</td>
+      <td>{{ rec.performed_on }}</td>
+      <td>{{ rec.next_due_date|default:"-" }}</td>
+      <td>{{ rec.next_due_odometer|default:"-" }}</td>
+      <td>{{ status }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5">No service history yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Service history</h2>
+<table>
+  <thead><tr><th>Date</th><th>Service</th><th>Odometer</th><th>By</th><th>Cost</th><th>Notes</th></tr></thead>
+  <tbody>
+  {% for r in history %}
+    <tr>
+      <td>{{ r.performed_on }}</td><td>{{ r.service_type }}</td><td>{{ r.odometer_at_service }}</td>
+      <td>{{ r.performed_by }}</td><td>{{ r.cost|default:"-" }}</td><td>{{ r.description }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
